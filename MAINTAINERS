@@ -12230,6 +12230,11 @@ W:	http://wiki.laptop.org/go/DCON
 S:	Maintained
 F:	drivers/staging/olpc_dcon/
 
+STAGING - OZMO DEVICES USB OVER WIFI DRIVER
+M:	Shigekatsu Tateno <shigekatsu.tateno@atmel.com>
+S:	Maintained
+F:	drivers/staging/ozwpan/
+
 STAGING - REALTEK RTL8712U DRIVERS
 M:	Larry Finger <Larry.Finger@lwfinger.net>
 M:	Florian Schilhabel <florian.c.schilhabel@googlemail.com>.
