@@ -336,15 +336,28 @@ static void oz_rx_frame(struct sk_buff *skb)
 	struct oz_elt *elt;
 	int length;
 	struct oz_pd *pd = NULL;
-	struct oz_hdr *oz_hdr = (struct oz_hdr *)skb_network_header(skb);
 	struct timespec current_time;
 	int dup = 0;
 	u32 pkt_num;
+	struct oz_hdr *oz_hdr;
+	void *oz_hdr_buffer = NULL;
+	void *oz_data_buffer = NULL;
 
-	oz_dbg(RX_FRAMES, "RX frame PN=0x%x LPN=0x%x control=0x%x\n",
-	       oz_hdr->pkt_num, oz_hdr->last_pkt_num, oz_hdr->control);
+	if (skb_is_nonlinear(skb)) {
+		oz_hdr_buffer = kmalloc(sizeof(oz_hdr), GFP_KERNEL);
+		if (!oz_hdr_buffer)
+			goto done;
+
+		oz_hdr = (struct oz_hdr *)skb_header_pointer(
+			skb, 0, sizeof(oz_hdr), oz_hdr_buffer);
+	} else {
+		oz_hdr = (struct oz_hdr *)skb_network_header(skb);
+	}
 	mac_hdr = skb_mac_header(skb);
 	src_addr = &mac_hdr[ETH_ALEN];
+
+	oz_dbg(ON, "RX frame PN=0x%x LPN=0x%x control=0x%x\n",
+	       oz_hdr->pkt_num, oz_hdr->last_pkt_num, oz_hdr->control);
 	length = skb->len;
 
 	/* Check the version field */
@@ -392,7 +405,22 @@ static void oz_rx_frame(struct sk_buff *skb)
 	}
 
 	length -= sizeof(struct oz_hdr);
-	elt = (struct oz_elt *)((u8 *)oz_hdr + sizeof(struct oz_hdr));
+
+	if (skb_is_nonlinear(skb)) {
+		oz_data_buffer = kmalloc(length, GFP_KERNEL);
+		if (!oz_data_buffer)
+			goto done;
+		if (skb_copy_bits(
+				skb,
+				sizeof(struct oz_hdr),
+				oz_data_buffer,
+				length)) {
+			goto done;
+		}
+		elt = (struct oz_elt *)oz_data_buffer;
+	} else {
+		elt = (struct oz_elt *)((u8 *)oz_hdr + sizeof(struct oz_hdr));
+	}
 
 	while (length >= sizeof(struct oz_elt)) {
 		length -= sizeof(struct oz_elt) + elt->length;
@@ -446,6 +474,9 @@ static void oz_rx_frame(struct sk_buff *skb)
 done:
 	if (pd)
 		oz_pd_put(pd);
+
+	kfree(oz_hdr_buffer);
+	kfree(oz_data_buffer);
 	consume_skb(skb);
 }
 
