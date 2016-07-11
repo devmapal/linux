@@ -320,6 +320,8 @@ static void oz_usb_handle_ep_data(struct oz_usb_ctx *usb_ctx,
 	struct oz_usb_hdr *usb_hdr, int len)
 {
 	struct oz_data *data_hdr = (struct oz_data *)usb_hdr;
+	if (len < sizeof(struct oz_data))
+		return;
 
 	switch (data_hdr->format) {
 	case OZ_DATA_F_MULTIPLE_FIXED: {
@@ -377,6 +379,9 @@ void oz_usb_rx(struct oz_pd *pd, struct oz_elt *elt)
 	struct oz_usb_hdr *usb_hdr = (struct oz_usb_hdr *)(elt + 1);
 	struct oz_usb_ctx *usb_ctx;
 
+	if (elt->length < sizeof(struct oz_usb_hdr))
+		return;
+
 	spin_lock_bh(&pd->app_lock[OZ_APPID_USB]);
 	usb_ctx = (struct oz_usb_ctx *)pd->app_ctx[OZ_APPID_USB];
 	if (usb_ctx)
@@ -403,7 +408,7 @@ void oz_usb_rx(struct oz_pd *pd, struct oz_elt *elt)
 			u8 data_len;
 
 			if (elt->length < sizeof(struct oz_get_desc_rsp) - 1)
-				break;
+				goto done;
 			data_len = elt->length -
 					(sizeof(struct oz_get_desc_rsp) - 1);
 			offs = le16_to_cpu(get_unaligned(&body->offset));
@@ -418,6 +423,8 @@ void oz_usb_rx(struct oz_pd *pd, struct oz_elt *elt)
 	case OZ_SET_CONFIG_RSP: {
 			struct oz_set_config_rsp *body =
 				(struct oz_set_config_rsp *)usb_hdr;
+			if (elt->length < sizeof(struct oz_set_config_rsp))
+				goto done;
 			oz_hcd_control_cnf(usb_ctx->hport, body->req_id,
 				body->rcode, NULL, 0);
 		}
@@ -425,6 +432,8 @@ void oz_usb_rx(struct oz_pd *pd, struct oz_elt *elt)
 	case OZ_SET_INTERFACE_RSP: {
 			struct oz_set_interface_rsp *body =
 				(struct oz_set_interface_rsp *)usb_hdr;
+			if (elt->length < sizeof(struct oz_set_interface_rsp))
+				goto done;
 			oz_hcd_control_cnf(usb_ctx->hport,
 				body->req_id, body->rcode, NULL, 0);
 		}
@@ -432,11 +441,8 @@ void oz_usb_rx(struct oz_pd *pd, struct oz_elt *elt)
 	case OZ_VENDOR_CLASS_RSP: {
 			struct oz_vendor_class_rsp *body =
 				(struct oz_vendor_class_rsp *)usb_hdr;
-
-			if (elt->length <
-			    sizeof(struct oz_vendor_class_rsp) - 1)
+			if (elt->length < sizeof(struct oz_vendor_class_rsp) - 1)
 				break;
-
 			oz_hcd_control_cnf(usb_ctx->hport, body->req_id,
 				body->rcode, body->data, elt->length-
 				sizeof(struct oz_vendor_class_rsp)+1);

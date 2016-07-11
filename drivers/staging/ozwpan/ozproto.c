@@ -164,13 +164,17 @@ static struct oz_pd *oz_connect_req(struct oz_pd *cur_pd, struct oz_elt *elt,
 			const u8 *pd_addr, struct net_device *net_dev)
 {
 	struct oz_pd *pd;
-	struct oz_elt_connect_req *body =
-			(struct oz_elt_connect_req *)(elt+1);
+	struct oz_elt_connect_req *body;
 	u8 rsp_status = OZ_STATUS_SUCCESS;
 	u8 stop_needed = 0;
 	u16 new_apps = g_apps;
 	struct net_device *old_net_dev = NULL;
 	struct oz_pd *free_pd = NULL;
+
+	if (elt->length < sizeof(struct oz_elt_connect_req))
+		return NULL;
+
+	body = (struct oz_elt_connect_req *)(elt+1);
 
 	if (cur_pd) {
 		pd = cur_pd;
@@ -343,13 +347,17 @@ static void oz_rx_frame(struct sk_buff *skb)
 	void *oz_hdr_buffer = NULL;
 	void *oz_data_buffer = NULL;
 
+	length = skb->len;
+	if (sizeof(struct oz_hdr) > length)
+		goto done;
+
 	if (skb_is_nonlinear(skb)) {
-		oz_hdr_buffer = kmalloc(sizeof(oz_hdr), GFP_KERNEL);
+		oz_hdr_buffer = kmalloc(sizeof(struct oz_hdr), GFP_KERNEL);
 		if (!oz_hdr_buffer)
 			goto done;
 
 		oz_hdr = (struct oz_hdr *)skb_header_pointer(
-			skb, 0, sizeof(oz_hdr), oz_hdr_buffer);
+			skb, 0, sizeof(struct oz_hdr), oz_hdr_buffer);
 	} else {
 		oz_hdr = (struct oz_hdr *)skb_network_header(skb);
 	}
@@ -358,7 +366,6 @@ static void oz_rx_frame(struct sk_buff *skb)
 
 	oz_dbg(ON, "RX frame PN=0x%x LPN=0x%x control=0x%x\n",
 	       oz_hdr->pkt_num, oz_hdr->last_pkt_num, oz_hdr->control);
-	length = skb->len;
 
 	/* Check the version field */
 	if (oz_get_prot_ver(oz_hdr->control) != OZ_PROTOCOL_VERSION) {
@@ -405,6 +412,8 @@ static void oz_rx_frame(struct sk_buff *skb)
 	}
 
 	length -= sizeof(struct oz_hdr);
+	if (sizeof(struct oz_elt) > length)
+		goto done;
 
 	if (skb_is_nonlinear(skb)) {
 		oz_data_buffer = kmalloc(length, GFP_KERNEL);
@@ -439,6 +448,9 @@ static void oz_rx_frame(struct sk_buff *skb)
 		case OZ_ELT_UPDATE_PARAM_REQ: {
 				struct oz_elt_update_param *body =
 					(struct oz_elt_update_param *)(elt + 1);
+
+				if (elt->length < sizeof(struct oz_elt_update_param))
+					goto done;
 				oz_dbg(ON, "RX: OZ_ELT_UPDATE_PARAM_REQ\n");
 				if (pd && (pd->state & OZ_PD_S_CONNECTED)) {
 					spin_lock(&g_polling_lock);
@@ -449,8 +461,11 @@ static void oz_rx_frame(struct sk_buff *skb)
 			}
 			break;
 		case OZ_ELT_FAREWELL_REQ: {
-				struct oz_elt_farewell *body =
+				struct oz_elt_farewell *body = 
 					(struct oz_elt_farewell *)(elt + 1);
+
+				if (elt->length < sizeof(struct oz_elt_farewell) - 1)
+					goto done;
 				oz_dbg(ON, "RX: OZ_ELT_FAREWELL_REQ\n");
 				oz_add_farewell(pd, body->ep_num,
 					body->index, body->report,
@@ -459,8 +474,10 @@ static void oz_rx_frame(struct sk_buff *skb)
 			break;
 		case OZ_ELT_APP_DATA:
 			if (pd && (pd->state & OZ_PD_S_CONNECTED)) {
-				struct oz_app_hdr *app_hdr =
-					(struct oz_app_hdr *)(elt+1);
+				struct oz_app_hdr *app_hdr = (struct oz_app_hdr *)(elt+1);
+
+				if (elt->length < sizeof(struct oz_app_hdr))
+					goto done;
 				if (dup)
 					break;
 				oz_handle_app_elt(pd, app_hdr->app_id, elt);

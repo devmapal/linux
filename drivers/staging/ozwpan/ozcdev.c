@@ -511,6 +511,9 @@ void oz_cdev_rx(struct oz_pd *pd, struct oz_elt *elt)
 		return;
 	}
 
+	if(elt->length < sizeof(struct oz_app_hdr))
+		goto out;
+
 	app_hdr = (struct oz_app_hdr *)(elt+1);
 	/* If sequence number is non-zero then check it is not a duplicate.
 	 */
