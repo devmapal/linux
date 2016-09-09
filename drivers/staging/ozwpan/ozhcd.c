@@ -34,6 +34,7 @@
 #include "ozusbif.h"
 #include "ozurbparanoia.h"
 #include "ozhcd.h"
+#include "ozwpan_trace.h"
 
 /*
  * Number of units of buffering to capture for an isochronous IN endpoint before
@@ -349,7 +350,7 @@ static void oz_complete_urb(struct usb_hcd *hcd, struct urb *urb,
 	 */
 	spin_unlock(&g_tasklet_lock);
 	if (oz_forget_urb(urb)) {
-		oz_dbg(ON, "ERROR Unknown URB %p\n", urb);
+		trace_unknown_urb(urb);
 	} else {
 		atomic_dec(&g_pending_urbs);
 		usb_hcd_giveback_urb(hcd, urb, status);
@@ -434,7 +435,7 @@ static int oz_enqueue_ep_urb(struct oz_port *port, u8 ep_addr, int in_dir,
 	int err = 0;
 
 	if (ep_addr >= OZ_NB_ENDPOINTS) {
-		oz_dbg(ON, "%s: Invalid endpoint number\n", __func__);
+		trace_invalid_endpoint_number(ep_addr);
 		return -EINVAL;
 	}
 	urbl = oz_alloc_urb_link();
@@ -733,7 +734,7 @@ void oz_hcd_pd_reset(void *hpd, void *hport)
 	struct oz_port *port = hport;
 	struct oz_hcd *ozhcd = port->ozhcd;
 
-	oz_dbg(ON, "PD Reset\n");
+	trace_pd_reset("PD Reset");
 	spin_lock_bh(&port->port_lock);
 	port->flags |= OZ_PORT_F_CHANGED;
 	port->status |= USB_PORT_STAT_RESET;
@@ -753,8 +754,7 @@ void oz_hcd_get_desc_cnf(void *hport, u8 req_id, u8 status, const u8 *desc,
 	struct urb *urb;
 	int err = 0;
 
-	oz_dbg(ON, "oz_hcd_get_desc_cnf length = %d offs = %d tot_size = %d\n",
-	       length, offset, total_size);
+	trace_usb_req_get_descriptor(length, offset, total_size);
 	urb = oz_find_urb_by_id(port, 0, req_id);
 	if (!urb)
 		return;
@@ -789,48 +789,6 @@ void oz_hcd_get_desc_cnf(void *hport, u8 req_id, u8 status, const u8 *desc,
 	}
 	urb->actual_length = total_size;
 	oz_complete_urb(port->ozhcd->hcd, urb, 0);
-}
-
-/*
- * Context: softirq
- */
-static void oz_display_conf_type(u8 t)
-{
-	switch (t) {
-	case USB_REQ_GET_STATUS:
-		oz_dbg(ON, "USB_REQ_GET_STATUS - cnf\n");
-		break;
-	case USB_REQ_CLEAR_FEATURE:
-		oz_dbg(ON, "USB_REQ_CLEAR_FEATURE - cnf\n");
-		break;
-	case USB_REQ_SET_FEATURE:
-		oz_dbg(ON, "USB_REQ_SET_FEATURE - cnf\n");
-		break;
-	case USB_REQ_SET_ADDRESS:
-		oz_dbg(ON, "USB_REQ_SET_ADDRESS - cnf\n");
-		break;
-	case USB_REQ_GET_DESCRIPTOR:
-		oz_dbg(ON, "USB_REQ_GET_DESCRIPTOR - cnf\n");
-		break;
-	case USB_REQ_SET_DESCRIPTOR:
-		oz_dbg(ON, "USB_REQ_SET_DESCRIPTOR - cnf\n");
-		break;
-	case USB_REQ_GET_CONFIGURATION:
-		oz_dbg(ON, "USB_REQ_GET_CONFIGURATION - cnf\n");
-		break;
-	case USB_REQ_SET_CONFIGURATION:
-		oz_dbg(ON, "USB_REQ_SET_CONFIGURATION - cnf\n");
-		break;
-	case USB_REQ_GET_INTERFACE:
-		oz_dbg(ON, "USB_REQ_GET_INTERFACE - cnf\n");
-		break;
-	case USB_REQ_SET_INTERFACE:
-		oz_dbg(ON, "USB_REQ_SET_INTERFACE - cnf\n");
-		break;
-	case USB_REQ_SYNCH_FRAME:
-		oz_dbg(ON, "USB_REQ_SYNCH_FRAME - cnf\n");
-		break;
-	}
 }
 
 /*
@@ -907,7 +865,7 @@ void oz_hcd_control_cnf(void *hport, u8 req_id, u8 rcode, const u8 *data,
 	wvalue = le16_to_cpu(setup->wValue);
 	if ((setup->bRequestType & USB_TYPE_MASK) == USB_TYPE_STANDARD) {
 		/* Standard requests */
-		oz_display_conf_type(setup->bRequest);
+		trace_rx_usb_req(setup-bRequest);
 		switch (setup->bRequest) {
 		case USB_REQ_SET_CONFIGURATION:
 			oz_hcd_complete_set_config(port, urb, rcode,
@@ -924,7 +882,7 @@ void oz_hcd_control_cnf(void *hport, u8 req_id, u8 rcode, const u8 *data,
 	} else {
 		int copy_len;
 
-		oz_dbg(ON, "VENDOR-CLASS - cnf\n");
+		trace_rx_usb_req_vendor_class("VENDOR-CLASS - cnf");
 		if (data_len) {
 			if (data_len <= urb->transfer_buffer_length)
 				copy_len = data_len;
@@ -952,7 +910,7 @@ static int oz_hcd_buffer_data(struct oz_endpoint *ep, const u8 *data,
 	if (space < 0)
 		space += ep->buffer_size;
 	if (space < (data_len+1)) {
-		oz_dbg(ON, "Buffer full\n");
+		trace_hcd_buffer_full("Buffer full");
 		return -1;
 	}
 	ep->buffer[ep->in_ix] = (u8)data_len;

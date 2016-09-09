@@ -77,7 +77,7 @@ int oz_elt_stream_create(struct oz_elt_buf *buf, u8 id, int max_buf_count)
 {
 	struct oz_elt_stream *st;
 
-	oz_dbg(ON, "%s: (0x%x)\n", __func__, id);
+	trace_usb_stream_create(__func__, id);
 
 	st = kzalloc(sizeof(struct oz_elt_stream), GFP_ATOMIC);
 	if (st == NULL)
@@ -97,7 +97,7 @@ int oz_elt_stream_delete(struct oz_elt_buf *buf, u8 id)
 	struct list_head *e, *n;
 	struct oz_elt_stream *st = NULL;
 
-	oz_dbg(ON, "%s: (0x%x)\n", __func__, id);
+	trace_usb_stream_delete(__func__, id);
 	spin_lock_bh(&buf->lock);
 	list_for_each(e, &buf->stream_list) {
 		st = list_entry(e, struct oz_elt_stream, link);

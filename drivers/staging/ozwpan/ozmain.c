@@ -16,6 +16,9 @@
 #include "ozproto.h"
 #include "ozcdev.h"
 
+#define CREATE_TRACE_POINTS
+#include "ozwpan_trace.h"
+
 unsigned int oz_dbg_mask = OZ_DEFAULT_DBG_MASK;
 
 /*

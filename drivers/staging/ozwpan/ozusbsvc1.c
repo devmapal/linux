@@ -414,7 +414,6 @@ void oz_usb_rx(struct oz_pd *pd, struct oz_elt *elt)
 			offs = le16_to_cpu(get_unaligned(&body->offset));
 			total_size =
 				le16_to_cpu(get_unaligned(&body->total_size));
-			oz_dbg(ON, "USB_REQ_GET_DESCRIPTOR - cnf\n");
 			oz_hcd_get_desc_cnf(usb_ctx->hport, body->req_id,
 					body->rcode, body->data,
 					data_len, offs, total_size);

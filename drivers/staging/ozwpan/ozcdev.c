@@ -63,7 +63,7 @@ static struct oz_serial_ctx *oz_cdev_claim_ctx(struct oz_pd *pd)
 static void oz_cdev_release_ctx(struct oz_serial_ctx *ctx)
 {
 	if (atomic_dec_and_test(&ctx->ref_count)) {
-		oz_dbg(ON, "Dealloc serial context\n");
+		trace_ozwpan_cdev_dealloc_ctx("Dealloc serial context");
 		kfree(ctx);
 	}
 }
@@ -75,8 +75,7 @@ static int oz_cdev_open(struct inode *inode, struct file *filp)
 {
 	struct oz_cdev *dev = container_of(inode->i_cdev, struct oz_cdev, cdev);
 
-	oz_dbg(ON, "major = %d minor = %d\n", imajor(inode), iminor(inode));
-
+	trace_ozwpan_cdev_open(inode);
 	filp->private_data = dev;
 	return 0;
 }
@@ -264,7 +263,7 @@ static long oz_cdev_ioctl(struct file *filp, unsigned int cmd,
 	case OZ_IOCTL_GET_PD_LIST: {
 			struct oz_pd_list list;
 
-			oz_dbg(ON, "OZ_IOCTL_GET_PD_LIST\n");
+			trace_ozwpan_cdev_ioctl_get_pd_list(cmd, arg);
 			memset(&list, 0, sizeof(list));
 			list.count = oz_get_pd_list(list.addr, OZ_MAX_PDS);
 			if (copy_to_user((void __user *)arg, &list,
@@ -275,7 +274,7 @@ static long oz_cdev_ioctl(struct file *filp, unsigned int cmd,
 	case OZ_IOCTL_SET_ACTIVE_PD: {
 			u8 addr[ETH_ALEN];
 
-			oz_dbg(ON, "OZ_IOCTL_SET_ACTIVE_PD\n");
+			trace_ozwpan_cdev_ioctl_set_active_pd(cmd, arg);
 			if (copy_from_user(addr, (void __user *)arg, ETH_ALEN))
 				return -EFAULT;
 			rc = oz_set_active_pd(addr);
@@ -284,7 +283,7 @@ static long oz_cdev_ioctl(struct file *filp, unsigned int cmd,
 	case OZ_IOCTL_GET_ACTIVE_PD: {
 			u8 addr[ETH_ALEN];
 
-			oz_dbg(ON, "OZ_IOCTL_GET_ACTIVE_PD\n");
+			trace_ozwpan_cdev_ioctl_get_active_pd(cmd, arg);
 			spin_lock_bh(&g_cdev.lock);
 			ether_addr_copy(addr, g_cdev.active_addr);
 			spin_unlock_bh(&g_cdev.lock);
@@ -369,18 +368,20 @@ int oz_cdev_register(void)
 	init_waitqueue_head(&g_cdev.rdq);
 	err = cdev_add(&g_cdev.cdev, g_cdev.devnum, 1);
 	if (err < 0) {
-		oz_dbg(ON, "Failed to add cdev\n");
+		trace_cdev_register_failed("Failed to add cdev");
 		goto unregister;
 	}
 	g_oz_class = class_create(THIS_MODULE, "ozmo_wpan");
 	if (IS_ERR(g_oz_class)) {
-		oz_dbg(ON, "Failed to register ozmo_wpan class\n");
+		trace_ozmo_wpan_class_register_failed(
+			"Failed to register ozmo_wpan class");
 		err = PTR_ERR(g_oz_class);
 		goto delete;
 	}
 	dev = device_create(g_oz_class, NULL, g_cdev.devnum, NULL, "ozwpan");
 	if (IS_ERR(dev)) {
-		oz_dbg(ON, "Failed to create sysfs entry for cdev\n");
+		trace_cdev_create_sysfs_entry_failed(
+			"Failed to create sysfs entry for cdev");
 		err = PTR_ERR(dev);
 		goto delete;
 	}
@@ -433,7 +434,7 @@ int oz_cdev_start(struct oz_pd *pd, int resume)
 	struct oz_serial_ctx *old_ctx;
 
 	if (resume) {
-		oz_dbg(ON, "Serial service resumed\n");
+		trace_cdev_service_resumed("Serial service resumed");
 		return 0;
 	}
 	ctx = kzalloc(sizeof(struct oz_serial_ctx), GFP_ATOMIC);
@@ -455,10 +456,10 @@ int oz_cdev_start(struct oz_pd *pd, int resume)
 		ether_addr_equal(pd->mac_addr, g_cdev.active_addr)) {
 		oz_pd_get(pd);
 		g_cdev.active_pd = pd;
-		oz_dbg(ON, "Active PD arrived\n");
+		trace_active_pd_arrived("Active PD arrived");
 	}
 	spin_unlock(&g_cdev.lock);
-	oz_dbg(ON, "Serial service started\n");
+	trace_cdev_service_started("Serial service started");
 	return 0;
 }
 
@@ -470,7 +471,7 @@ void oz_cdev_stop(struct oz_pd *pd, int pause)
 	struct oz_serial_ctx *ctx;
 
 	if (pause) {
-		oz_dbg(ON, "Serial service paused\n");
+		trace_cdev_service_paused("Serial service paused");
 		return;
 	}
 	spin_lock_bh(&pd->app_lock[OZ_APPID_SERIAL]);
@@ -487,9 +488,9 @@ void oz_cdev_stop(struct oz_pd *pd, int pause)
 	spin_unlock(&g_cdev.lock);
 	if (pd) {
 		oz_pd_put(pd);
-		oz_dbg(ON, "Active PD departed\n");
+		trace_active_pd_departed("Active PD departed");
 	}
-	oz_dbg(ON, "Serial service stopped\n");
+	trace_cdev_service_stopped("Serial service stopped");
 }
 
 /*
@@ -507,7 +508,7 @@ void oz_cdev_rx(struct oz_pd *pd, struct oz_elt *elt)
 
 	ctx = oz_cdev_claim_ctx(pd);
 	if (ctx == NULL) {
-		oz_dbg(ON, "Cannot claim serial context\n");
+		trace_cdev_claim_ctx_failed("Cannot claim serial context");
 		return;
 	}
 

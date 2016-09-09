@@ -66,16 +66,16 @@ void oz_pd_set_state(struct oz_pd *pd, unsigned state)
 	pd->state = state;
 	switch (state) {
 	case OZ_PD_S_IDLE:
-		oz_pd_dbg(pd, ON, "PD State: OZ_PD_S_IDLE\n");
+		trace_set_pd_state_idle(state);
 		break;
 	case OZ_PD_S_CONNECTED:
-		oz_pd_dbg(pd, ON, "PD State: OZ_PD_S_CONNECTED\n");
+		trace_set_pd_state_connected(state);
 		break;
 	case OZ_PD_S_STOPPED:
-		oz_pd_dbg(pd, ON, "PD State: OZ_PD_S_STOPPED\n");
+		trace_set_pd_state_stopped(state);
 		break;
 	case OZ_PD_S_SLEEP:
-		oz_pd_dbg(pd, ON, "PD State: OZ_PD_S_SLEEP\n");
+		trace_set_pd_state_sleep(state);
 		break;
 	}
 }

@@ -18,6 +18,7 @@
 #include "ozpd.h"
 #include "ozproto.h"
 #include "ozusbsvc.h"
+#include "ozwpan_trace.h"
 
 #include "ozappif.h"
 #include <asm/unaligned.h>
@@ -364,8 +365,7 @@ static void oz_rx_frame(struct sk_buff *skb)
 	mac_hdr = skb_mac_header(skb);
 	src_addr = &mac_hdr[ETH_ALEN];
 
-	oz_dbg(ON, "RX frame PN=0x%x LPN=0x%x control=0x%x\n",
-	       oz_hdr->pkt_num, oz_hdr->last_pkt_num, oz_hdr->control);
+	trace_rx_frame(oz_hdr->pkt_num, oz_hdr->last_pkt_num, oz_hdr->control);
 
 	/* Check the version field */
 	if (oz_get_prot_ver(oz_hdr->control) != OZ_PROTOCOL_VERSION) {
@@ -437,11 +437,11 @@ static void oz_rx_frame(struct sk_buff *skb)
 			break;
 		switch (elt->type) {
 		case OZ_ELT_CONNECT_REQ:
-			oz_dbg(ON, "RX: OZ_ELT_CONNECT_REQ\n");
+			trace_rx_elt_connect_req(elt->type);
 			pd = oz_connect_req(pd, elt, src_addr, skb->dev);
 			break;
 		case OZ_ELT_DISCONNECT:
-			oz_dbg(ON, "RX: OZ_ELT_DISCONNECT\n");
+			trace_rx_elt_disconnect(elt->type);
 			if (pd)
 				oz_pd_sleep(pd);
 			break;
@@ -451,7 +451,7 @@ static void oz_rx_frame(struct sk_buff *skb)
 
 				if (elt->length < sizeof(struct oz_elt_update_param))
 					goto done;
-				oz_dbg(ON, "RX: OZ_ELT_UPDATE_PARAM_REQ\n");
+				trace_rx_elt_update_param_req(elt->type);
 				if (pd && (pd->state & OZ_PD_S_CONNECTED)) {
 					spin_lock(&g_polling_lock);
 					pd_set_keepalive(pd, body->keepalive);
@@ -461,12 +461,12 @@ static void oz_rx_frame(struct sk_buff *skb)
 			}
 			break;
 		case OZ_ELT_FAREWELL_REQ: {
-				struct oz_elt_farewell *body = 
+				struct oz_elt_farewell *body =
 					(struct oz_elt_farewell *)(elt + 1);
 
 				if (elt->length < sizeof(struct oz_elt_farewell) - 1)
 					goto done;
-				oz_dbg(ON, "RX: OZ_ELT_FAREWELL_REQ\n");
+				trace_rx_elt_farewell_req(elt->type);
 				oz_add_farewell(pd, body->ep_num,
 					body->index, body->report,
 					elt->length + 1 - sizeof(*body));
@@ -480,11 +480,12 @@ static void oz_rx_frame(struct sk_buff *skb)
 					goto done;
 				if (dup)
 					break;
+				trace_rx_elt_app_data(elt->type);
 				oz_handle_app_elt(pd, app_hdr->app_id, elt);
 			}
 			break;
 		default:
-			oz_dbg(ON, "RX: Unknown elt %02x\n", elt->type);
+			trace_rx_elt_unknown(elt->type);
 		}
 		elt = oz_next_elt(elt);
 	}
